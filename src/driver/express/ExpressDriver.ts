@@ -356,7 +356,7 @@ export class ExpressDriver extends BaseDriver {
   handleError(error: any, action: ActionMetadata | undefined, options: Action): any {
     if (this.isDefaultErrorHandlingEnabled) {
       const response: any = options.response;
-
+  
       // set http code
       // note that we can't use error instanceof HttpError properly anymore because of new typescript emit process
       if (error.httpCode) {
@@ -364,14 +364,14 @@ export class ExpressDriver extends BaseDriver {
       } else {
         response.status(500);
       }
-
+  
       // apply http headers
       if (action) {
         Object.keys(action.headers).forEach(name => {
           response.header(name, action.headers[name]);
         });
       }
-
+  
       // send error content
       if (action && action.isJsonTyped) {
         response.json(this.processJsonError(error));
@@ -410,6 +410,49 @@ export class ExpressDriver extends BaseDriver {
           }
         });
       } else if (use.middleware.prototype && use.middleware.prototype.error) {
+  // -------------------------------------------------------------------------
+  // Protected Methods
+  // -------------------------------------------------------------------------
+
+  /**
+   * Creates middlewares from the given "use"-s.
+   */
+  protected prepareMiddlewares(uses: UseMetadata[]) {
+    const middlewareFunctions: Function[] = [];
+    uses.forEach((use: UseMetadata) => {
+      if (use.middleware.prototype && use.middleware.prototype.use) {
+        // if this is function instance of MiddlewareInterface
+        middlewareFunctions.push((request: any, response: any, next: (err: any) => any) => {
+          try {
+            const useResult = getFromContainer<ExpressMiddlewareInterface>(use.middleware).use(request, response, next);
+          if (isPromiseLike(useResult)) {
+            useResult.catch((error: any) => {
+              this.handleError(error, undefined, { request, response, next });
+              return error;
+            });
+          }
+
+          return useResult;
+        } catch (error) {
+          this.handleError(error, undefined, { request, response, next });
+        }
+      });
+    } else if (use.middleware.prototype && use.middleware.prototype.error) {
+      // if this is function instance of ErrorMiddlewareInterface
+      middlewareFunctions.push(function (error: any, request: any, response: any, next: (err: any) => any) {
+        return getFromContainer<ExpressErrorMiddlewareInterface>(use.middleware).error(
+          error,
+          request,
+          response,
+          next
+        );
+      });
+    } else {
+      middlewareFunctions.push(use.middleware);
+    }
+  });
+  return middlewareFunctions;
+}
         // if this is function instance of ErrorMiddlewareInterface
         middlewareFunctions.push(function (error: any, request: any, response: any, next: (err: any) => any) {
           return getFromContainer<ExpressErrorMiddlewareInterface>(use.middleware).error(
