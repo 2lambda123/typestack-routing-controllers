@@ -356,7 +356,7 @@ export class ExpressDriver extends BaseDriver {
   handleError(error: any, action: ActionMetadata | undefined, options: Action): any {
     if (this.isDefaultErrorHandlingEnabled) {
       const response: any = options.response;
-  
+
       // set http code
       // note that we can't use error instanceof HttpError properly anymore because of new typescript emit process
       if (error.httpCode) {
@@ -364,14 +364,14 @@ export class ExpressDriver extends BaseDriver {
       } else {
         response.status(500);
       }
-  
+
       // apply http headers
       if (action) {
         Object.keys(action.headers).forEach(name => {
           response.header(name, action.headers[name]);
         });
       }
-  
+
       // send error content
       if (action && action.isJsonTyped) {
         response.json(this.processJsonError(error));
